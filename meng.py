@@ -43,7 +43,7 @@ def get_initial_tempo(tempo_mean, tempo_variance):
 
 # changes in tempo, denoted delta_n
 # is maybe unnecessary
-change_variance = 1.
+change_variance = 100.
 def get_tempo_changes(arr_measure_positions, change_variance):
 	arr = []
 	change = np.random.normal(0, (change_variance*get_note_length(0, arr_measure_positions[0]))**(0.5))
@@ -55,7 +55,7 @@ def get_tempo_changes(arr_measure_positions, change_variance):
 
 # noise in data, denoted epsilon_n
 # is maybe unnecessary
-noise_variance = 1.
+noise_variance = 100.
 def get_noise_amounts(arr_measure_positions, noise_variance):
 	arr = []
 	noise = np.random.normal(0, (noise_variance*get_note_length(0, arr_measure_positions[0]))**(0.5))
@@ -82,14 +82,13 @@ def theta_prime(initial_measure_position, next_measure_position, initial_ioi):
 
 	# parameters for tempo
 	h2 = (2 * math.pi * tempo_variance)**(-0.5)
-	m2 = np.array([tempo_mean])
-	q2 = np.array([[1./tempo_variance]])
+	m2 = tempo_mean
+	q2 = 1./tempo_variance
 	tempo_kernel = GaussianKernel(h2, m2, q2)
 
 	# multiplying the two
 	final_kernel = tempo_fixed_ioi_kernel.multiply(tempo_kernel)
 	final_kernel.h *= get_initial_probability(initial_measure_position) * get_transition_probability(initial_measure_position, next_measure_position)
-	print final_kernel.h
 	return final_kernel
 
 # maybe not needed
@@ -153,9 +152,10 @@ def thin(theta):
 	# formatted as (left endpoint, right endpoint, optimal theta)
 	for i in range(len(theta)):
 		if i == 0:
-			memo[0] = [(tempo_min, tempo_max, theta[0])]
+			memo[0] = [(tempo_min, tempo_max, GaussianKernel(*theta[0]))]
 		else:
 			last = theta[i]
+			last = GaussianKernel(*last)
 			prev = memo[i - 1]
 			intervals = []
 			for j in range(len(prev)):
@@ -192,21 +192,28 @@ def thin(theta):
 			memo[i] = thin_intervals(intervals)
 	ret = []
 	for i in memo[-1]:
-		ret.append(i[2])
+		ret.append(i[2].convert_to_tuple())
 	return ret
 
 def initial_theta(next_measure_position, initial_tempo, initial_ioi):
 	arr = []
+	parents = {}
 	for p in all_measure_positions:
 		t = theta_prime(p, next_measure_position, initial_ioi)
-		arr.append(t)
-	return thin(arr)
+		arr.append(t.convert_to_tuple())
+		parents[t.convert_to_tuple()] = p
+	thinned = thin(arr)
+	final_parents = {}
+	for i in thinned:
+		final_parents[i] = parents[i]
+	return thinned, final_parents
+
 
 def get_next_theta(old_theta, previous_measure_position, current_measure_position, current_ioi):
 	arr = []
-	parents = []
+	parents = {}
 	for t in old_theta:
-		kernel_t = t.add_variables(1)
+		kernel_t = GaussianKernel(*t).add_variables(1)
 
 		kernel_c = theta_c(previous_measure_position, current_measure_position, current_ioi)
 
@@ -218,58 +225,60 @@ def get_next_theta(old_theta, previous_measure_position, current_measure_positio
 		product_kernel.q = np.fliplr(np.flipud(product_kernel.q))
 		
 		final_kernel = product_kernel.max_out(1)
-		arr.append(final_kernel)
+		# this is awful, but since I know these are 1-D I will store them
+		# as a tuple (h, m, q) so it's hashable
+		final_kernel_tuple = tuple([final_kernel.h, float(final_kernel.m), float(final_kernel.q)])
+		# t_tuple = tuple([t.h, float(t.m), float(t.q)])
+		arr.append(final_kernel_tuple)
 		# gotta make this hashable
-		parents[final_kernel] = (t, previous_measure_position)
+		parents[final_kernel_tuple] = (t, previous_measure_position)
 	thinned = thin(arr)
 	final_parents = {}
 	for i in thinned:
 		final_parents[i] = parents[i]
 	return thinned, final_parents
 
-iois = [484.83265306122394, 468.11428571428587, 986.3836734693887 ]
-				# 462.54149659863924, 445.82312925169936, 964.092517006804,
-				# 518.269387755101, 445.823129251703, 991.9564625850326, 
-				# 479.2598639455791, 490.40544217687057, 930.6557823129242]
+iois = [484.83265306122394, 468.11428571428587, 986.3836734693887,
+				462.54149659863924, 445.82312925169936, 964.092517006804,
+				518.269387755101, 445.823129251703, 991.9564625850326, 
+				479.2598639455791, 490.40544217687057, 930.6557823129242]
 
 
 # row i and col j is theta_i(all_measure_positions[j])
 theta_array = []
 parent_array = []
 initial_row = []
+parent_row = []
 for p in range(len(all_measure_positions)):
 	initial_tempo = get_initial_tempo(tempo_mean, tempo_variance)
-	x = initial_theta(all_measure_positions[p], initial_tempo, iois[0])
+	x, parents = initial_theta(all_measure_positions[p], initial_tempo, iois[0])
 	initial_row.append(x)
+	parent_row.append(parents)
 theta_array.append(initial_row)
-parent_array.append([0]*len(all_measure_positions))
+parent_array.append(parent_row)
 for i in range(1, len(iois)):
 	last_row = theta_array[-1]
 	cur_row = []
 	parent_row = []
 	for p1 in range(len(all_measure_positions)):
-		thetas = []
+		thetas = set()
 		parents = {}
 		for p2 in range(len(all_measure_positions)):
 			x, parents_x = get_next_theta(last_row[p2], all_measure_positions[p2], all_measure_positions[p1], iois[i])
-			thetas = thetas + x
+			thetas = thetas.union(x)
 			parents.update(parents_x)
 		cur_row.append(thetas)
 		parent_row.append(parents)
 	theta_array.append(cur_row)
 	parent_array.append(parent_row)
-# print theta_array
 
-last_theta = []
+last_theta = set()
 for x in theta_array[-1]:
-	last_theta = last_theta + x
-sorted_theta_array = sorted(list(last_theta), key=lambda x: x.h)
-print 'hello'
-for i in sorted_theta_array:
-	print i.h
+	last_theta = last_theta.union(x)
+sorted_theta_array = sorted(list(last_theta), key=lambda x: x[0])
 best_theta = sorted_theta_array[-1]
 parent = None
-best_tempo = float(best_theta.m)
+best_tempo = float(best_theta[1])
 tempos = [best_tempo]
 positions = []
 for i in range(len(theta_array[-1])):
@@ -277,13 +286,13 @@ for i in range(len(theta_array[-1])):
 		positions.append(all_measure_positions[i])
 		parent = parent_array[-1][i][best_theta]
 		break
-print positions, tempos, parent[0].h
+# print positions, tempos, parent
 
 
-for i in range(len(iois) - 2, 0, -1):
+for i in range(len(iois) - 2, -1, -1):
 	best_theta = parent[0]
 	positions.append(parent[1])
 	parent = parent_array[i][all_measure_positions.index(parent[1])][best_theta]
-positions.append(parent[1])
+positions.append(parent)
 print iois
-print positions
+print positions[::-1]

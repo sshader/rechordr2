@@ -8,8 +8,12 @@ def quadratic_form(m, q):
 class GaussianKernel():
 	def __init__(self, h, m, q):
 		self.h = h
+		if type(m) is float:
+			m = np.array([m])
 		self.m = m
 		self.dimension = len(m)
+		if type(q) is float:
+			q = np.array([[q]])
 		assert q.shape == (self.dimension, self.dimension)
 		self.q = q
 
@@ -57,6 +61,10 @@ class GaussianKernel():
 		q = np.pad(self.q, ((0, num), (0, num)), 'constant')
 		return GaussianKernel(h, m, q)
 
+	def convert_to_tuple(self):
+		assert self.dimension == 1
+		return tuple([self.h, float(self.m), float(self.q)])
+
 	# returns GaussianKernel evaluated at x
 	def evaluate(self, x):
 		assert len(x) == len(self.m)
@@ -66,4 +74,4 @@ class GaussianKernel():
 		return self.h == other.h and self.m == other.m and self.q == other.q
 
 	def __str__(self):
-		return self.h, self.m, self.q
+		return str(self.h) + ' ,' + str(self.m) + ' ,' + str(self.q)
