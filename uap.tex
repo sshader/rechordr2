@@ -1,0 +1,65 @@
+\documentclass[11pt]{article}
+\usepackage{setspace}
+\usepackage[margin=1in]{geometry}
+
+\title{Extensions on Rhythmic Quantization from Inter-Onset Intervals}
+\author{Sarah Shader with advisor Eran Egozy}
+
+\begin{document}
+\maketitle
+%\onehalfspacing
+\section{Introduction}
+For ages, humans have been interested in the problem of music transcription. By hearing a piece of music performed, one wants to write (transcribe) this in a format that can be used to later reproduce the same piece of music. Humans typically transcribe performances in the form of sheet music, which is a format that can be easily understood by other humans, but not by computers. As the area of music technology grows, there is a greater demand for music transcription in a format that can be easily interpreted by a computer. Due to this increased demand and developing technologies, creating algorithms for automatic music transcription has become an active area of research.
+
+Most music can be divided into pitch and rhythm. While both of these are interrelated, and there has been research that transcribes both in parallel, in my proposed project, I plan to focus on rhythm transcription. Rhythm transcription, much like general music transcription, is a hard problem even for humans since most performances involve fluctuating tempos and artistic interpretation. Essentially, almost no musical performance will be played with perfect robotic rhythmic precision; it is an interpretation of the written rhythm. This makes the problem of rhythmic transcription even more challenging for computers, since this requires extracting the underlying structure behind inherently irregular data.
+
+Rhythmic transcription can be broken down further into four parts: onsets, tactus, tempo, and quantization \cite{amt}. Detecting onsets consists of converting an audio recording to a set of onset times that correspond to the start time of each note played. Onset detection by itself is an area of active research, so in this project, I will assume that this has already been done, and we have as input a set of inter-onset intervals (IOIs). Tactus refers to the ``beat" of the piece. This is often the beat that a listener would tap his or her foot to. Relatedly, tempo refers to how many of these beats occur within a minute. Finally, quantization, which is the main focus of this project, refers to \textit{quantizing} rhythmically imperfect IOIs to musical quantities such as half notes, quarter notes, triplets, etc. 
+
+Tempo and note quantization are closely linked. For instance, the tempo determines roughly the length of the IOI that would correspond to a quantized quarter note, but additionally knowing that an IOI of a certain duration is quantized as a quarter note would indicate what the tempo is. For this reason, several papers have created systems that transcribe tempo and quantization simultaneously \cite{raphael}, \cite{barpointer}, \cite{nakamura}. These papers involve creating a Bayesian network to model the dependencies between tempo and quantized note length, and then using inference algorithms to make it computationally feasible to find the most probable result according to the model. I propose to first implement one of these rhythm quantization models, and then extend on it by implementing one of three features, each of which I will discuss in the following sections.
+
+
+\section{Finding a Transition Matrix for Rhythm Quantization} 
+All of these systems rely on having an accurate transition matrix that indicates the probability of a certain note length given the previous (e.g. it is more likely that a single triplet is followed by another triplet than a quarter note). In his paper \cite{raphael}, Raphael demonstrates the importance of a good transition matrix for accurate rhythm transcription by comparing the performance of his model against several different transition matrices, ranging from the uniform probability transition matrix to the transition matrix with the exact probabilities occurring in the sample piece. The most common approach to creating a transition matrix is to take the probabilities found in already transcribed music similar to the piece that is being transcribed. For instance, to transcribe a Chopin Nocturne, the transition matrix would be created from the transition probabilities occurring in already described Chopin Nocturnes. This creates a circular problem, since you can only really get an accurate transcription if you have already transcribed several similar pieces. 
+
+Another paper \cite{cemgil} uses a heuristic, which does not depend at all on the sample piece, to create the transition matrix. This heuristic is based on bit complexity, and tries to capture the intuition that notes tend to change most often at the start of a measure, or halfway through the measure in comparison to some other point in the middle of the measure. For example, it is fairly likely that a note ends exactly half way through a measure, since this could be common rhythmic patterns such as a half note, a quarter note, a sequence of eighth notes, or even a sequence of triplets. However, in comparison, it is very unlikely that a note would end $\frac{15}{32}$ of the way through a measure, since this would only happen using 32nd notes. This second approach offers much more flexibility than the first approach, since this does not depend on already having accurate transcriptions of similar pieces. If the second approach can transcribe rhythm as accurately as the first, this would provide a more general algorithm for rhythm detection.
+
+In general, it would be interesting to investigate how to best find a transition matrix in a way that does not depend heavily on existing transcriptions, and additionally performs well on a large scope of pieces. I propose to develop several heuristics for creating transition matrices, and compare their performance to each other, as well as existing strategies for creating transition matrices. Additionally, it would be interesting to develop an algorithm that could learn a good transition matrix by way of machine learning. While this approach still relies on having existing transcriptions of similar pieces, it would be automating the creation of a transition matrix, and could be less dependent on having a completely accurate transcription of the other pieces. A machine learning approach to creating the transition matrix could also eliminate any overfitting and produce a more general transition matrix that could apply to a broader spectrum of pieces.
+
+\section{Rhythm Quantization from Multiple Samples}
+The most common way to evaluate the performance of a rhythm quantization algorithm is to give as input a specific song, and see how many mistakes the algorithm makes. Some papers do this with several different versions of the same song to see if the algorithm can accurately transcribe regardless of the artistic interpretation of the performer. However, there has been little research on algorithms that take in multiple performances of the same piece and use all of them to come up with a more accurate rhythm quantization. Even among one performer, playing the same piece repeatedly, there are small variations in tempos and note lengths from performance to performance. As an example, if the performer makes a small mistake in one performance, it is unlikely that the same mistake will be made each time the performer plays the piece. Therefore, it seems plausible that by having multiple, slightly varied, performances of the same piece, an algorithm could be adapted to detect the same underlying structure of all the performances.
+
+Clear approaches would be to average the IOIs, and hope that a performer plays close to the true rhythm on average. However, this would not work well in the presence of lots of tempo variation. Alternatively, the same rhythm quantization algorithm can be run separately on all the performances, and any note quantizations that are common among all the performances are almost surely correct. However, it is unclear how to deal with cases where different IOIs are classified as different note types. It is also possible to develop more sophisticated approaches. Perhaps to fix the issues with tempo variation for averaging IOIs, one could detect the tempos of all the performances separately, and then scale all the performances by tempo before averaging. If one could achieve much more accuracy by simply collecting a few more performances of the desired piece, this would make it much easier to quickly get accurate rhythmic transcriptions.
+
+\section{Supervised Rhythm Quantization}
+Inevitably, these models for rhythm quantization will make mistakes and mis-quantize a few notes. Due to the interdependent nature of these models, oftentimes correcting just one error will cause other errors to be corrected when the algorithm is run again. In \cite{raphael}, they plot the number of errors made by the algorithm against the number of errors corrected by the user. The graphs demonstrate that the rhythm quantization gets significantly better by simply correcting a couple errors. This paper performs the error correction by simply correcting the first error in the piece. However, it might make sense to have a more sophisticated strategy for error correction to allow a user to answer a few questions to supervise the rhythm quantization process.
+
+All of these models have some probability associated with each note quantization, and the best note quantization is the maximum a posteriori (MAP) estimate, which is the most likely configuration of note quantizations and tempos given the observed set of IOIs. Within the MAP estimate, there are note quantizations that have higher probabilities associated with them compared to others. These probabilities can be viewed as how confident the algorithm is in its classification, so correcting these errors, as opposed to just the first error to occur, could potentially produce a better overall rhythm quantization. Additionally, if there are two estimates that have similar a posteriori probabilities, it could be beneficial to play both for the user, and allow the user to select the one that sounds ``more correct," as opposed to returning the single MAP estimate, and making the user manually correct errors.
+
+
+\pagebreak
+
+\begin{thebibliography}{1}
+
+\bibitem{amt}Klapuri, A. P. (2004). Automatic Music Transcription as We Know it Today. \textit{Journal of New Music Research}, 33:3, 269-282.
+
+\bibitem{raphael}Raphael, C. (2001). Automated Rhythm Transcription.  \textit{ISMIR 2006 - 7th International Conference on Music Information Retrieval}.
+
+\bibitem{cemgil}Cemgil, A. T., Kappen, B. (2003). Monte Carlo Methods for Tempo Tracking and Rhythm Quantization. \textit{Journal of Artificial Intelligence Research} 18, 45-81.
+
+\bibitem{barpointer}Whiteley, N., Cemgil, A., Godsill, S. (2006). Bayesian Modelling of Temporal Structure in Musical Audio. \textit{ISMIR 2006 - 7th International Conference on Music Information Retrieval}. 29-34. 
+
+\bibitem{polyph}Nakamura, E., Yoshii, K., Sagayama, S. (2017). Rhythm Transcription of
+Polyphonic Piano Music Based on Merged-Output HMM for Multiple
+Voices. \textit{IEEE/ACM TASLP}.
+
+\bibitem{nakamura} Nakamura, E., Itoyama, K., Yoshii, K. (2016). Rhythm Transcription of MIDI Performances Based on Hierarchical Bayesian Modelling of Repetition and Modification of Musical Note Patterns. \textit{Proc. EUSIPCO} 1946-1950.
+
+\end{thebibliography}
+
+
+
+
+
+
+
+\end{document}

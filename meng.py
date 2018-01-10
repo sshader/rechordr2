@@ -6,10 +6,20 @@ sys.path.append('..')
 from common.gaussian_kernel import *
 
 # onset times called o_i in paper, seconds
-onsets = []
+onsets = [0, 0.453642, 0.935058, 1.823826, 2.245065, 2.657046, 3.448605,
+					3.865215, 4.346631, 5.175222, 5.577945, 6.0177, 6.874065, 7.281417,
+					7.744317, 8.623827, 9.008034, 9.466305, 10.304154, 10.706877,
+					11.146632, 11.98911, 12.414978, 12.86862, 13.262085, 13.706469,
+					14.136966, 15.687681, 17.275428, 17.747586, 17.803134, 18.659499,
+					19.11777, 19.53438, 20.409261, 20.816613, 21.251739, 22.640439,
+					24.066171, 24.279105, 24.542958, 24.973455, 25.394694, 25.834449]
+
+iois = []
+for i in range(len(onsets) - 1):
+	iois.append(onsets[i+1] - onsets[i])
 
 # measure positions, S in paper, rational on interval [0, 1)
-all_measure_positions = [0, .25, .5, .75]
+all_measure_positions = [0, .125, .25, .375, .5, .625, .75, .875]
 
 # l(s_n, s_n+1) in paper
 def get_note_length(current_measure_position, next_measure_position):
@@ -28,22 +38,22 @@ def get_score_positions(arr_measure_positions):
 
 # initial distribution, denoted I(s_0) in paper
 def get_initial_probability(measure_position):
-	return .25
+	return .125
 
 # probability matrix, denoted R in paper
 def get_transition_probability(current_measure_position, next_measure_position):
-	return .25
+	return .125
 
 # tempo, denoted T_i, measured in seconds per measure
-tempo_mean = 1920.
-tempo_variance = 100.
+tempo_mean = 1.6
+tempo_variance = .2
 # initial tempo drawn from normal
 def get_initial_tempo(tempo_mean, tempo_variance):
 	return np.random.normal(tempo_mean, tempo_variance**(.5))
 
 # changes in tempo, denoted delta_n
 # is maybe unnecessary
-change_variance = 100.
+change_variance = .1
 def get_tempo_changes(arr_measure_positions, change_variance):
 	arr = []
 	change = np.random.normal(0, (change_variance*get_note_length(0, arr_measure_positions[0]))**(0.5))
@@ -55,7 +65,7 @@ def get_tempo_changes(arr_measure_positions, change_variance):
 
 # noise in data, denoted epsilon_n
 # is maybe unnecessary
-noise_variance = 100.
+noise_variance = .1
 def get_noise_amounts(arr_measure_positions, noise_variance):
 	arr = []
 	noise = np.random.normal(0, (noise_variance*get_note_length(0, arr_measure_positions[0]))**(0.5))
@@ -131,7 +141,7 @@ def c(previous_measure_position, current_measure_position, previous_tempo, curre
 
 
 tempo_min = 0.
-tempo_max = 2400.
+tempo_max = 2.4
 def thin_intervals(intervals):
 	final_intervals = []
 	left, right, opt = intervals[0]
@@ -166,7 +176,7 @@ def thin(theta):
 				b = 2 * float((last.q * last.m - opt.q * opt.m))
 				c = float(opt.m**2 * opt.q - last.m**2 * last.q)
 				new_vals = [left, right]
-				if b**2 - 4 * a * c >= 0:
+				if b**2 - 4 * a * c >= 0 and a != 0:
 					pm = math.sqrt(b**2 - 4 * a * c)
 					sol1 = (-1 * b + pm)/(2. * a)
 					sol2 = (-1 * b - pm)/(2. * a)
@@ -238,10 +248,10 @@ def get_next_theta(old_theta, previous_measure_position, current_measure_positio
 		final_parents[i] = parents[i]
 	return thinned, final_parents
 
-iois = [484.83265306122394, 468.11428571428587, 986.3836734693887,
-				462.54149659863924, 445.82312925169936, 964.092517006804,
-				518.269387755101, 445.823129251703, 991.9564625850326, 
-				479.2598639455791, 490.40544217687057, 930.6557823129242]
+# iois = [484.83265306122394, 468.11428571428587, 986.3836734693887,
+# 				462.54149659863924, 445.82312925169936, 964.092517006804,
+# 				518.269387755101, 445.823129251703, 991.9564625850326, 
+# 				479.2598639455791, 490.40544217687057, 930.6557823129242]
 
 
 # row i and col j is theta_i(all_measure_positions[j])
